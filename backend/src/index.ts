@@ -5,7 +5,7 @@ import pdfParse from 'pdf-parse';
 import { config } from './config.js';
 import { vectorStore } from './vector-store.js';
 import { processPDF, processText } from './rag.js';
-import { runAgent, runRAG } from './agent.js';
+import { runAgent, runRAG, streamAgent, streamRAG } from './agent.js';
 
 const app = express();
 app.use(cors());
@@ -82,30 +82,72 @@ app.post('/api/agent', async (req, res) => {
   }
 });
 
-// ===== 流式对话（SSE） =====
+// ===== 流式对话（RAG 模式） =====
 app.post('/api/chat/stream', async (req, res) => {
   try {
     const { message } = req.body;
     if (!message) return res.status(400).json({ error: '消息不能为空' });
 
-    // 简单流式：先检索，再逐字返回（生产环境应使用 AI SDK 的 streamText）
-    const { context } = await runRAG(message);
+    const { stream, answer } = await streamRAG(message);
+
+    if (!stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.write(`data: ${JSON.stringify({ chunk: answer })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+      return;
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
 
-    const answer = context.answer || '暂无答案';
-    const chars = answer.split('');
-
-    for (const char of chars) {
-      res.write(`data: ${JSON.stringify({ chunk: char })}\n\n`);
-      await new Promise(r => setTimeout(r, 30)); // 模拟打字机效果
+    for await (const chunk of stream.textStream) {
+      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err: any) {
+    console.error('[Stream Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== 流式对话（Agent 模式） =====
+app.post('/api/agent/stream', async (req, res) => {
+  try {
+    const { message, history = [] } = req.body;
+    if (!message) return res.status(400).json({ error: '消息不能为空' });
+
+    const { stream, answer } = await streamAgent(message, history);
+
+    if (!stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.write(`data: ${JSON.stringify({ chunk: answer })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    for await (const chunk of stream.textStream) {
+      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (err: any) {
+    console.error('[Agent Stream Error]', err);
     res.status(500).json({ error: err.message });
   }
 });

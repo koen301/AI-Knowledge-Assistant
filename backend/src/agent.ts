@@ -1,5 +1,5 @@
-import { generateText, tool } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { generateText, streamText, tool } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { config } from './config.js';
 import { retrieveContext } from './rag.js';
@@ -15,10 +15,12 @@ import { retrieveContext } from './rag.js';
  */
 
 // 自定义 OpenAI provider（支持 DeepSeek / 硅基流动等兼容端点）
-const customModel = openai(config.llm.model, {
-  apiKey: config.llm.apiKey,
+const openai = createOpenAI({
   baseURL: config.llm.baseURL,
+  apiKey: config.llm.apiKey,
 });
+
+const customModel = openai(config.llm.model);
 
 /**
  * Tool 1: 知识库检索
@@ -119,4 +121,66 @@ export async function runRAG(question: string) {
   });
 
   return { answer: result.text };
+}
+
+/**
+ * 流式 RAG 模式 - 返回可流式输出的结果
+ */
+export async function streamRAG(question: string) {
+  const { context } = await retrieveContext(question);
+
+  if (!context) {
+    return {
+      answer: '知识库中暂无相关内容，请先上传文档。',
+      sources: [],
+      stream: null
+    };
+  }
+
+  const result = streamText({
+    model: customModel,
+    system: '你是一位基于知识库文档回答问题的助手。请严格根据提供的参考资料回答，不要编造。',
+    prompt: `参考资料：\n${context}\n\n用户问题：${question}\n\n请根据参考资料回答。`,
+    temperature: 0.2,
+  });
+
+  return {
+    answer: '',
+    sources: [],
+    stream: result,
+  };
+}
+
+/**
+ * 流式 Agent 模式 - 返回可流式输出的结果
+ */
+export async function streamAgent(question: string, chatHistory: { role: string; content: string }[] = []) {
+  const systemPrompt = `你是一位专业的 AI 助手，擅长结合知识库检索和精确计算来回答问题。
+
+工作原则：
+1. 如果用户问题涉及已上传的文档内容，优先调用 searchKnowledgeBase 工具检索相关知识。
+2. 如果涉及数值计算，必须调用 calculator 工具，不要心算。
+3. 基于检索到的信息给出准确、简洁的回答。
+4. 如果知识库中没有相关信息，坦诚告知用户。
+
+当前对话历史：
+${chatHistory.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n')}`;
+
+  const result = streamText({
+    model: customModel,
+    system: systemPrompt,
+    prompt: question,
+    tools: {
+      searchKnowledgeBase,
+      calculator,
+    },
+    maxSteps: 5,
+    temperature: 0.3,
+  });
+
+  return {
+    answer: '',
+    stream: result,
+    toolCalls: [],
+  };
 }

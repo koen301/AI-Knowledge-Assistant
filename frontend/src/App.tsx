@@ -18,7 +18,7 @@ function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <header style={{
         padding: '20px 32px',

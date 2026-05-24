@@ -24,7 +24,14 @@ export default function Chat({ mode }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    if (scrollRef.current) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({
+          top: scrollRef.current.scrollHeight,
+          behavior: messages.length > 1 ? 'smooth' : 'auto'
+        })
+      })
+    }
   }, [messages])
 
   const handleSend = async () => {
@@ -35,8 +42,11 @@ export default function Chat({ mode }: Props) {
     setMessages(prev => [...prev, { role: 'user', content: userMsg }])
     setLoading(true)
 
+    const tempAssistantMsg: Message = { role: 'assistant', content: '' }
+    setMessages(prev => [...prev, tempAssistantMsg])
+
     try {
-      const endpoint = mode === 'agent' ? '/api/agent' : '/api/chat'
+      const endpoint = mode === 'agent' ? '/api/agent/stream' : '/api/chat/stream'
       const history = messages.map(m => ({ role: m.role, content: m.content }))
 
       const res = await fetch(endpoint, {
@@ -45,18 +55,56 @@ export default function Chat({ mode }: Props) {
         body: JSON.stringify({ message: userMsg, history }),
       })
 
-      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`)
+      }
 
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      let fullText = ''
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue
+
+          const data = trimmedLine.slice(6)
+          if (data === '[DONE]') continue
+
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.chunk) {
+              fullText += parsed.chunk
+              setMessages(prev => {
+                const newMsgs = [...prev]
+                const lastMsg = newMsgs[newMsgs.length - 1]
+                if (lastMsg.role === 'assistant') {
+                  lastMsg.content = fullText
+                }
+                return newMsgs
+              })
+            }
+          } catch (e) {
+            console.warn('Parse error', e)
+          }
+        }
+      }
+    } catch (err: any) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.answer,
-        toolCalls: data.toolCalls,
-        mode: data.mode,
-      }])
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '❌ 请求失败，请检查后端服务是否运行',
+        content: '❌ 请求失败: ' + err.message,
       }])
     } finally {
       setLoading(false)
@@ -64,7 +112,7 @@ export default function Chat({ mode }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -72,6 +120,7 @@ export default function Chat({ mode }: Props) {
           flex: 1, overflowY: 'auto',
           padding: '24px 32px',
           display: 'flex', flexDirection: 'column', gap: 20,
+          minHeight: 0,
         }}
       >
         {messages.map((msg, i) => (
