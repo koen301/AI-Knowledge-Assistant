@@ -113,7 +113,7 @@ npm run dev
 ## 项目结构
 
 ```
-ai-knowledge-assistant/
+ai-knowledge-assistant-ts/
 ├── backend/
 │   ├── src/
 │   │   ├── index.ts          # Express 主入口
@@ -139,21 +139,6 @@ ai-knowledge-assistant/
 - **内存向量库**：不启动 ChromaDB 时自动使用，重启后数据丢失
 
 两种模式代码共存，可根据需求切换。
-
-## 常见问题
-
-### Q: 上传文档失败？
-A: 检查 ChromaDB 服务是否启动，或网络是否可达
-
-### Q: 流式输出无效？
-A: 确保使用 `/api/chat/stream` 或 `/api/agent/stream` 接口
-
-### Q: 如何清空知识库？
-A: 调用 `POST /api/clear` 接口
-
-## 截图
-
-![界面预览](docs/screenshot.png)
 
 ## 许可证
 
