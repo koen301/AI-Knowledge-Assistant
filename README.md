@@ -3,7 +3,7 @@
 基于 LangChain + RAG + LLM 的个人知识库问答助手，支持多轮对话、文档上传与智能检索。
 > 另有更好的交互体验 **[TypeScript 全栈版本](https://github.com/koen301/AI-Knowledge-Assistant-ts)**
 
-## 项目亮点
+## 核心特点
 
 - **RAG 检索增强生成**：基于向量检索从私有文档中提取相关知识，减少 LLM 幻觉
 - **多轮对话记忆**：自动维护对话上下文，支持连续追问
