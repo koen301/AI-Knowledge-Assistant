@@ -2,6 +2,9 @@
 
 基于 **FastAPI + React + LangChain + ChromaDB + OpenAI Embedding** 的前后端分离 RAG 检索增强生成系统，支持多轮对话、文档上传与智能检索。
 
+## 截图
+![界面预览](docs/screenshot-fastapi.png)
+
 ## 核心特点
 
 - **前后端分离架构**：FastAPI 后端 + React 前端，职责分离，便于开发和扩展
@@ -24,8 +27,7 @@ pip install -r requirements.txt
 
 # 安装前端依赖
 cd frontend
-npm install
-cd ..
+pnpm install
 ```
 
 ### 2. 配置 API Key
@@ -44,7 +46,7 @@ python -m uvicorn api:app --reload --port 8000
 
 # 终端2: 启动前端 (端口 5173)
 cd frontend
-npm run dev
+pnpm dev
 ```
 
 ### 4. 访问
@@ -138,7 +140,5 @@ python app.py
 
 浏览器访问 `http://localhost:7860`
 
-## 截图
-![界面预览](docs/screenshot-fastapi.png)
-
+## Gradio 截图
 ![界面预览](docs/screenshot.png)
